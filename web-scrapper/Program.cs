@@ -3,31 +3,25 @@ using System.IO;
 using System.Net.Http;
 using System.Text.RegularExpressions;
 using HtmlAgilityPack;
+using static System.Net.Mime.MediaTypeNames;
 
 class Program
 {
     private static readonly HttpClient httpClient = new HttpClient();
     private static readonly string baseUrl = "https://books.toscrape.com/";
+    private static readonly byte MAX_PAGES = 2;
+    private static int currentPage = 0;
 
     static async Task Main()
     {
         await TraversePagesAsync("index.html");
         Console.WriteLine("Scraping completed!");
 
-        // ---------------------
-        //string outputFolder = "downloaded_pages";
-
-        //if (!Directory.Exists(outputFolder))
-        //{
-        //    Directory.CreateDirectory(outputFolder);
-        //}
-
-        //await ScrapePage(baseUrl, outputFolder);
-        //Console.WriteLine("FINISHED");
     }
 
 
     private static async Task TraversePagesAsync(string relativeUrl) {
+
         string fullUrl = baseUrl + relativeUrl;
 
         Console.WriteLine($"Processing: {fullUrl}");
@@ -42,22 +36,42 @@ class Program
             // Load the HTML content into an HtmlDocument
             htmlDoc.LoadHtml(htmlContent);
 
-            // create a folder
-            var outputFolder = ExtractPartBeforeHtml(relativeUrl);
+            // create the page folder
+            var pageFolder = ExtractPartBeforeHtml(relativeUrl);
             // string outputFolder = "downloaded_pages";
 
-            if (!Directory.Exists(outputFolder))
+            if (!Directory.Exists(pageFolder))
             {
-                Directory.CreateDirectory(outputFolder);
+                Directory.CreateDirectory(pageFolder);
             }
 
-            // download an img
+            // ---- Images -------------
 
             // download all images
+            // Download all files on the current page (e.g., images, stylesheets)
+            var imageLinks = htmlDoc.DocumentNode.SelectNodes("//img[@src]");
 
-            // find  nxt page
+            if (imageLinks.Count > 0) {
+                //create the images sub-folder
+                var imagesSubFolder = $"{pageFolder}/images";
+                if (!Directory.Exists(imagesSubFolder))
+                {
+                    Directory.CreateDirectory(imagesSubFolder);
+                }
+
+                Console.WriteLine($"{imageLinks.Count} images");
+                foreach (var link in imageLinks)
+                {
+                    string fileUrl = new Uri(new Uri(baseUrl), link.GetAttributeValue("src", "")).AbsoluteUri;
+                    Console.WriteLine($"image url: {fileUrl}");
+                    await DownloadFileAndSave(fileUrl, imagesSubFolder);
+                }
+            }
+
+
+            // find nxt page
             // Select the <a> tag under <ul> with class 'pager'
-            HtmlNode nextPageATag = htmlDoc.DocumentNode.SelectSingleNode("//ul[@class='pager']/li/a");
+            HtmlNode nextPageATag = htmlDoc.DocumentNode.SelectSingleNode("//ul[@class='pager']/li/a"); // TODO
             string nextPageRelUrl = nextPageATag.GetAttributeValue("href", "");
             // string nextPageUrl = new Uri(new Uri(baseUrl), nextPageRelUrl).AbsoluteUri;
 
@@ -104,7 +118,7 @@ class Program
             foreach (var link in links)
             {
                 string fileUrl = new Uri(new Uri(url), link.GetAttributeValue("href", link.GetAttributeValue("src", ""))).AbsoluteUri;
-                await DownloadFile(fileUrl, outputFolder);
+                await DownloadFileAndSave(fileUrl, outputFolder);
             }
 
             // Download the HTML content
@@ -121,7 +135,7 @@ class Program
         }
     }
 
-    static async Task DownloadFile(string url, string outputFolder)
+    static async Task DownloadFileAndSave(string url, string outputFolder)
     {
         using HttpClient client = new();
         HttpResponseMessage response = await client.GetAsync(url);
