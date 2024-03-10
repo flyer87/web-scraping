@@ -13,7 +13,7 @@ class Program
 {
     private static readonly HttpClient httpClient = new HttpClient();
     private static readonly string baseUrl = "https://books.toscrape.com/";
-    private static readonly byte MAX_PAGES = 5;
+    private static readonly byte MAX_PAGES = 2;
     private static int currentPage = 0;
 
     static async Task Main()
@@ -22,15 +22,8 @@ class Program
         Console.WriteLine("Scraping completed!");
     }
 
-
     private static async Task TraversePagesAsync(string relativeUrl)
     {
-        //currentPage++;
-        //if (currentPage > MAX_PAGES)
-        //{
-        //    return;
-        //}
-
         if (string.IsNullOrEmpty(relativeUrl))
         {
             return;
@@ -43,8 +36,8 @@ class Program
         {
             string htmlContent = await GetHtmlContent(fullUrl, client);
 
-            HtmlDocument htmlDoc = new();
             // Load the HTML content into an HtmlDocument
+            HtmlDocument htmlDoc = new();
             htmlDoc.LoadHtml(htmlContent);
 
             // create the page folder
@@ -54,7 +47,10 @@ class Program
                 Directory.CreateDirectory(pageFolder);
             }
 
-            // ---- Images -------------
+            // save html file
+            await DownloadFileAndSave(fullUrl, pageFolder);
+
+            // save images
             await DownloadAllImages(htmlDoc, pageFolder);
 
             // get next page url
@@ -93,15 +89,16 @@ class Program
     {
         // Select the <a> tag under <ul> with class 'pager'
         HtmlNode nextPageATag = htmlDoc.DocumentNode.SelectSingleNode("//ul[@class='pager']/li[@class='next']/a");
+
         if (nextPageATag == null) { return ""; }
 
         string nextPageHRef = nextPageATag.GetAttributeValue("href", "");
-        var nextPageRelUrl = AddCatalogueToRelUrl(nextPageHRef);
+        var nextPageRelUrl = AddCatalogueToLink(nextPageHRef);
 
         return nextPageRelUrl;
     }
 
-    private static string AddCatalogueToRelUrl(string relUrl)
+    private static string AddCatalogueToLink(string relUrl)
     {
         if (relUrl.Contains("catalogue/"))
         {
@@ -121,7 +118,6 @@ class Program
             if (response.IsSuccessStatusCode)
             {
                 htmlContent = await response.Content.ReadAsStringAsync();
-                // Process the HTML content
             }
             else
             {
