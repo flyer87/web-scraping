@@ -1,13 +1,4 @@
-﻿using System;
-using System.Collections;
-using System.IO;
-using System.Net.Http;
-using System.Text.RegularExpressions;
-using HtmlAgilityPack;
-using static System.Net.Mime.MediaTypeNames;
-using System.Collections.Generic;
-using System.Collections.Specialized;
-using System.Threading.Tasks;
+﻿using HtmlAgilityPack;
 
 class Program
 {
@@ -73,8 +64,6 @@ class Program
         {
             Directory.CreateDirectory(imagesSubFolder);
         }
-
-        Console.WriteLine($"{imageLinks.Count} images");
 
         var downloadTasks = imageLinks.Select(link =>
         {
@@ -149,6 +138,5 @@ class Program
         HttpResponseMessage response = await client.GetAsync(url);
         string fileName = Path.Combine(outputFolder, Path.GetFileName(new Uri(url).LocalPath));
         await File.WriteAllBytesAsync(fileName, await response.Content.ReadAsByteArrayAsync());
-        // Console.WriteLine($"Downloaded: {url}");
     }
 }
