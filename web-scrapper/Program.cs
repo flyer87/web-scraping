@@ -37,63 +37,68 @@ class Program
         }
 
         string fullUrl = baseUrl + relativeUrl;
-
         Console.WriteLine($"Processing: {fullUrl}");
 
-        string htmlContent = "";
         using (HttpClient client = new())
         {
-            htmlContent = await GetHtmlContent(fullUrl, htmlContent, client);
+            string htmlContent = await GetHtmlContent(fullUrl, client);
 
             HtmlDocument htmlDoc = new();
-
             // Load the HTML content into an HtmlDocument
             htmlDoc.LoadHtml(htmlContent);
 
             // create the page folder
-            var pageFolder = ExtractPartFromUrl(relativeUrl);
-
+            var pageFolder = GetFolderNameFromUrl(relativeUrl);
             if (!Directory.Exists(pageFolder))
             {
                 Directory.CreateDirectory(pageFolder);
             }
 
             // ---- Images -------------
+            await DownloadAllImages(htmlDoc, pageFolder);
 
-            // download all images
-            var imageLinks = htmlDoc.DocumentNode.SelectNodes("//img[@src]");
+            // get next page url
+            string nextPageRelUrl = BuildNextPageUrl(htmlDoc);
 
-            if (imageLinks.Count > 0)
-            {
-                //create the images sub-folder
-                var imagesSubFolder = $"{pageFolder}/images";
-                if (!Directory.Exists(imagesSubFolder))
-                {
-                    Directory.CreateDirectory(imagesSubFolder);
-                }
-
-                Console.WriteLine($"{imageLinks.Count} images");
-
-
-                var downloadTasks = imageLinks.Select(link =>
-                {
-                    string fileUrl = new Uri(new Uri(baseUrl), link.GetAttributeValue("src", "")).AbsoluteUri;
-                    return DownloadFileAndSave(fileUrl, imagesSubFolder);
-                });
-
-                await Task.WhenAll(downloadTasks);
-            }
-
-
-            // find nxt page
-            // Select the <a> tag under <ul> with class 'pager'
-            HtmlNode nextPageATag = htmlDoc.DocumentNode.SelectSingleNode("//ul[@class='pager']/li[@class='next']/a"); // TODO
-            if (nextPageATag == null) { return; }
-            string nextPageHRef = nextPageATag.GetAttributeValue("href", "");
-
-            var nextPageRelUrl = AddCatalogueToRelUrl(nextPageHRef);
             await TraversePagesAsync(nextPageRelUrl);
         }
+    }
+
+    private static async Task DownloadAllImages(HtmlDocument htmlDoc, string pageFolder)
+    {
+        // get all image links
+        var imageLinks = htmlDoc.DocumentNode.SelectNodes("//img[@src]");
+
+        if (imageLinks.Count == 0) return;
+
+        //create the images sub-folder
+        var imagesSubFolder = $"{pageFolder}/images";
+        if (!Directory.Exists(imagesSubFolder))
+        {
+            Directory.CreateDirectory(imagesSubFolder);
+        }
+
+        Console.WriteLine($"{imageLinks.Count} images");
+
+        var downloadTasks = imageLinks.Select(link =>
+        {
+            string fileUrl = new Uri(new Uri(baseUrl), link.GetAttributeValue("src", "")).AbsoluteUri;
+            return DownloadFileAndSave(fileUrl, imagesSubFolder);
+        });
+
+        await Task.WhenAll(downloadTasks);
+    }
+
+    private static string BuildNextPageUrl(HtmlDocument htmlDoc)
+    {
+        // Select the <a> tag under <ul> with class 'pager'
+        HtmlNode nextPageATag = htmlDoc.DocumentNode.SelectSingleNode("//ul[@class='pager']/li[@class='next']/a");
+        if (nextPageATag == null) { return ""; }
+
+        string nextPageHRef = nextPageATag.GetAttributeValue("href", "");
+        var nextPageRelUrl = AddCatalogueToRelUrl(nextPageHRef);
+
+        return nextPageRelUrl;
     }
 
     private static string AddCatalogueToRelUrl(string relUrl)
@@ -106,8 +111,10 @@ class Program
         return "catalogue/" + relUrl;
     }
 
-    private static async Task<string> GetHtmlContent(string fullUrl, string htmlContent, HttpClient client)
+    private static async Task<string> GetHtmlContent(string fullUrl, HttpClient client)
     {
+        string htmlContent = "";
+
         try
         {
             HttpResponseMessage response = await client.GetAsync(fullUrl);
@@ -131,21 +138,13 @@ class Program
         return htmlContent;
     }
 
-    static string ExtractPartFromUrl(string url)
+    static string GetFolderNameFromUrl(string url)
     {
-        // Use regular expression to match part before ".html"
-        Regex regex = new Regex(@"^(.*?)\.html$");
-        Match match = regex.Match(url);
+        // Find the index of ".html" in the URL
+        int endIndex = url.IndexOf(".html", StringComparison.OrdinalIgnoreCase);
 
-        if (match.Success)
-        {
-            return match.Groups[1].Value;
-        }
-        else
-        {
-            // If no match, return the original URL
-            return url;
-        }
+        // If ".html" is found, return the substring before it; otherwise, return the original URL
+        return endIndex != -1 ? url[..endIndex] : url;
     }
 
     static async Task DownloadFileAndSave(string url, string outputFolder)
