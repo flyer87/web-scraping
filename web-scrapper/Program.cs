@@ -148,61 +148,6 @@ class Program
         }
     }
 
-    //static string ExtractPartBeforeHtml(string relativeUrl)
-    //{
-    //    // Use regular expression to match part before ".html"
-    //    // Regex regex = new Regex(@"^(.*?)\.html$");
-    //    // string pattern = @"^(.*?\.html)";
-    //    string pattern = @$"{baseUrl}(.*?)$";
-    //    Match match = Regex.Match(relativeUrl, pattern);
-
-    //    if (match.Success)
-    //    {
-    //        return match.Groups[1].Value;
-    //    }
-    //    else
-    //    {
-    //        // If no match, return the original URL
-    //        return relativeUrl;
-    //    }
-    //}
-
-    private static void SavePageToDisk(string relativeUrl, HtmlDocument htmlDocument) { }
-
-    static async Task ScrapePage(string url, string outputFolder)
-    {
-        using (HttpClient client = new())
-        {
-            HttpResponseMessage response = await client.GetAsync(url);
-            string htmlContent = await response.Content.ReadAsStringAsync();
-
-            HtmlDocument doc = new();
-            doc.LoadHtml(htmlContent);
-
-            // Download all files on the current page (e.g., images, stylesheets)
-            var links = doc.DocumentNode.SelectNodes("//img[@src]");
-
-            Console.WriteLine($"{links.Count} links");
-            foreach (var link in links)
-            {
-                string fileUrl = new Uri(new Uri(url), link.GetAttributeValue("href", link.GetAttributeValue("src", ""))).AbsoluteUri;
-                await DownloadFileAndSave(fileUrl, outputFolder);
-            }
-
-            // Download the HTML content
-            string fileName = Path.Combine(outputFolder, Path.GetFileName(url) + ".html");
-            File.WriteAllText(fileName, htmlContent);
-            Console.WriteLine($"Downloaded: {url}");
-
-            // Find and follow links to other pages
-            foreach (var nextPageLink in doc.DocumentNode.SelectNodes("//a[@href]"))
-            {
-                string nextUrl = new Uri(new Uri(url), nextPageLink.GetAttributeValue("href", "")).AbsoluteUri;
-                await ScrapePage(nextUrl, outputFolder);
-            }
-        }
-    }
-
     static async Task DownloadFileAndSave(string url, string outputFolder)
     {
         using HttpClient client = new();
